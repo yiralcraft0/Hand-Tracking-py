@@ -5,3 +5,5 @@ pyaudio
 SpeechRecognition
 pyperclip
 pyttsx3
+volume-control
+numpy
