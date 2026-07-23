@@ -1,0 +1,7 @@
+opencv-python
+mediapipe<0.10.30
+pyautogui
+pyaudio
+SpeechRecognition
+pyperclip
+pyttsx3
