@@ -29,10 +29,10 @@ class HandDetection:
 
     def findHands(self, frame, isDraw=True):
         frameRGB = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-        results = self.hands.process(frameRGB)
+        self.results = self.hands.process(frameRGB)
 
-        if results.multi_hand_landmarks and isDraw:
-            for handLms in results.multi_hand_landmarks:
+        if self.results.multi_hand_landmarks and isDraw:
+            for handLms in self.results.multi_hand_landmarks:
                 self.mpDraw.draw_landmarks(
                     frame,
                     handLms,
@@ -41,6 +41,18 @@ class HandDetection:
                 
         return frame
 
+    def findPos(self, frame, handNo = 0, isDraw = True):
+        lmList = []
+
+        if self.results.multi_hand_landmarks and isDraw:
+            anyHand = self.results.multi_hand_landmarks[handNo]
+            for id, lm in enumerate(anyHand.landmark):
+                h, w, c = frame.shape
+                cx, cy = int(lm.x * w), int(lm.y * h)
+                lmList.append([id,cx,cy])
+
+        if len(lmList):
+            return lmList
 
 def main():
     cTime = 0
@@ -49,6 +61,8 @@ def main():
     capture = cv.VideoCapture(0)
     handtraking = HandDetection()
 
+    x , y = 0 , 0
+
     while True:
         loaded, frame = capture.read()
         if not loaded:
@@ -56,6 +70,14 @@ def main():
 
         # Fixed call: using instance `handtraking` instead of class `HandDetection`
         frame = handtraking.findHands(frame)
+        lmList = handtraking.findPos(frame)
+
+
+        if lmList != None :
+            x, y = lmList[8][1] , lmList[8][2]
+            ix, iy = x, y
+            cv.line(frame, (ix, iy), (x, y), (0, 255, 0), thickness=3)
+            ix, iy = x, y
 
         cTime = time.time()
         fps = f"FPS : {round(1 / (cTime - pTime))}" if (cTime - pTime) > 0 else "FPS : 0"
