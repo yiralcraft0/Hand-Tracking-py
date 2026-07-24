@@ -23,7 +23,7 @@ def set_windows_volume_scalar(scalar_value: float) -> None:
 
 wCam, hCam = 640, 480
 
-capture = cv.VideoCapture(0)
+capture = cv.VideoCapture(1)
 capture.set(cv.CAP_PROP_FRAME_WIDTH, wCam)
 capture.set(cv.CAP_PROP_FRAME_HEIGHT, hCam)
 
