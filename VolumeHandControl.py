@@ -1,31 +1,21 @@
 import cv2 as cv
 import time
+import math
+import numpy as np
 import mediapipe as mp
 from HandTrakingModule import HandDetection
-import math
 from pycaw.pycaw import AudioUtilities
-import numpy as np
 
-def set_windows_volume_db(db_value: float) -> None:
+def set_windows_volume_scalar(scalar_value: float) -> None:
     try:
-        # Get the default Windows output device
         device = AudioUtilities.GetSpeakers()
-
-        # Access its volume controller
         volume = device.EndpointVolume
 
-        # Get supported decibel range
-        min_db, max_db, step_db = volume.GetVolumeRange()
+        # Clamp between 0.0 (0%) and 1.0 (100%)
+        target_scalar = max(0.0, min(1.0, float(scalar_value)))
 
-        # Keep the requested value inside the supported range
-        target_db = max(min_db, min(max_db, float(db_value)))
-
-        # Set the volume
-        volume.SetMasterVolumeLevel(target_db, None)
-
-        # print(f"Device: {device.FriendlyName}")
-        # print(f"Volume range: {min_db:.2f} dB to {max_db:.2f} dB")
-        # print(f"Master volume changed to: {target_db:.2f} dB")
+        # Set scalar volume directly matching Windows UI
+        volume.SetMasterVolumeLevelScalar(target_scalar, None)
 
     except Exception as error:
         print(f"Failed to change volume: {error}")
@@ -33,56 +23,68 @@ def set_windows_volume_db(db_value: float) -> None:
 
 wCam, hCam = 640, 480
 
-capture = cv.VideoCapture(1)
+capture = cv.VideoCapture(0)
+capture.set(cv.CAP_PROP_FRAME_WIDTH, wCam)
+capture.set(cv.CAP_PROP_FRAME_HEIGHT, hCam)
 
-capture.set(cv.CAP_PROP_FRAME_WIDTH, 640)
-capture.set(cv.CAP_PROP_FRAME_HEIGHT, 480)
-
-pTime, cTime = 0, 0
-
-handD = HandDetection(modelComplexity=0, detectConfidence= 0.7, trackConfidence=0.7, maxHands= 1)
-
+pTime = 0
+handD = HandDetection(modelComplexity=0, detectConfidence=0.7, trackConfidence=0.7, maxHands=1)
 
 while True:
-    sucess , frame = capture.read()
+    success, frame = capture.read()
+    if not success:
+        break
 
-    findHand = handD.findHands(frame)
+    flipedFrame = cv.flip(frame, 1)
 
-    lmList = handD.findHandPos(frame)
+    findHand = handD.findHands(flipedFrame)
+    lmList = handD.findHandPos(flipedFrame)
 
-    if lmList != None:
+    if lmList is not None and len(lmList) > 0:
         thumbTip = lmList[4]
         thumbX, thumbY = thumbTip[1], thumbTip[2]
+        
         indexFingTip = lmList[8]
         indexX, indexY = indexFingTip[1], indexFingTip[2]
 
-        cv.line(frame, (thumbX, thumbY), (indexX, indexY), (145, 188, 75), 5)
+        cv.line(flipedFrame, (thumbX, thumbY), (indexX, indexY), (145, 188, 75), 5)
 
-        first = math.pow((thumbX - indexX), 2)
-        second = math.pow((thumbY - indexY), 2)
+        cv.circle(flipedFrame, (thumbX, thumbY), 10, (65, 203, 203), -1)
+        cv.circle(flipedFrame, (indexX, indexY), 10, (65, 203, 203), -1)
+        
+        xCoord, yCoord = int((thumbX + indexX) / 2), int((thumbY + indexY) / 2)
+        cv.circle(flipedFrame, (xCoord, yCoord), 10, (65, 203, 203), -1)
 
-        cv.circle(frame, (thumbX, thumbY), 10, (65, 203, 203), -1)
-        cv.circle(frame, (indexX, indexY), 10, (65, 203, 203), -1)
-        xCoord , yCoord = int((thumbX + indexX)/2) , int((thumbY + indexY)/2)
-        cv.circle(frame, (xCoord, yCoord), 10, (65, 203, 203), -1 )
+        # Calculate distance between thumb and index finger
+        lineLength = math.hypot(thumbX - indexX, thumbY - indexY)
 
-        length = int(math.sqrt(first + second))
-        cv.putText(frame, str(f"Length : {length} pixel"), (400,40), cv.FONT_HERSHEY_COMPLEX, .8, (65, 203, 203), 2)
+        # 1. Map distance (20px to 200px) -> Percent (0 to 100) for display
+        volPercent = int(np.interp(lineLength, [20, 200], [0, 100]))
+        
+        # 2. Map distance (20px to 200px) -> Scalar (0.0 to 1.0) for PyCAW
+        volScalar = np.interp(lineLength, [20, 200], [0.0, 1.0])
 
-        volume = np.interp(length, [40, 150], [-96.0, 0.0])
-        set_windows_volume_db(volume)
-        if length < 40:
-            cv.circle(frame, (xCoord, yCoord), 10, (0,255,0), -1 )
+        # Set Windows master volume
+        set_windows_volume_scalar(volScalar)
 
+        # Display percentage on screen
+        cv.putText(flipedFrame, f"Volume : {volPercent} %", (400, 40), 
+                    cv.FONT_HERSHEY_COMPLEX, 0.8, (65, 203, 203), 2)
 
+        if volPercent < 15:
+            cv.circle(flipedFrame, (xCoord, yCoord), 10, (0, 0, 255), -1)
+
+    # FPS Calculation
     cTime = time.time()
-    fps = int(1/ (cTime - pTime))
+    fps = int(1 / (cTime - pTime)) if (cTime - pTime) > 0 else 0
     pTime = cTime
 
-    cv.putText(frame, str(f"FPS : {fps}"), (10,40), cv.FONT_HERSHEY_COMPLEX, 1, (65, 203, 203), 2)
-    cv.imshow("Volume Control", frame)
+    cv.putText(flipedFrame, f"FPS : {fps}", (10, 40), 
+                cv.FONT_HERSHEY_COMPLEX, 1, (65, 203, 203), 2)
+    
+    cv.imshow("Volume Control", flipedFrame)
 
-    if cv.waitKey(1) & 0xFF == ord('q') :
+    if cv.waitKey(1) & 0xFF == ord('q'):
         break
 
 capture.release()
