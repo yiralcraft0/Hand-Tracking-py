@@ -7,3 +7,4 @@ pyperclip
 pyttsx3
 pycaw
 numpy
+autopy
