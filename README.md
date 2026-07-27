@@ -84,7 +84,7 @@ Control the mouse cursor using hand gestures captured through the webcam.
 Clone the repository
 
 ```bash
-git clone https://github.com/your-username/ComputerVision.git
+git clone https://github.com/your-username/ComputerVision-py.git
 ```
 
 Go into the project folder
